@@ -55,11 +55,11 @@ function Watch-Command
                 {
                     if($output[$index] -ne $previous[$index])
                     {
-                        Write-Host $output[$index] -BackgroundColor DarkMagenta
+                        Write-Host $output[$index] -BackgroundColor DarkGreen
                     }
                     elseif($output[$index] -ne $ghost[$index])
                     {
-                        Write-Host $output[$index] -BackgroundColor DarkGreen
+                        Write-Host $output[$index] -BackgroundColor DarkCyan
                     }
                     else
                     {
