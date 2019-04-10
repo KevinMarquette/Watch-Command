@@ -9,6 +9,7 @@ function Watch-Command
     you have to force quit the function or it will keep running
     #>
 
+    [Alias('Watch')]
     [cmdletbinding()]
     param
     (
