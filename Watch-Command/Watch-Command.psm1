@@ -44,7 +44,15 @@ function Watch-Command
             $hideCursor = "$esc[?25l"
             $showCursor = "$esc[?25h"
             $message = "{0:HH:mm:ss} Refresh {1}: {2,-60}" -f (Get-Date),$Seconds, $ScriptBlock.ToString()
-            $output = $ScriptBlock.Invoke() | Out-String -Stream
+            
+            try
+            {
+                $output = @($ScriptBlock.Invoke() | Out-String -Stream)
+            }
+            catch
+            {
+                $output = @( $PSItem | Out-String -Stream )
+            }
             
             Write-Host "$hideCursor${setCursorTop}" -NoNewline
             Write-Host "$message"
