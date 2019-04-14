@@ -1,3 +1,55 @@
+function WriteHost 
+{
+    param(
+        [parameter(
+            position = 0,
+            ValueFromPipeline
+        )]
+        [string]
+        $Message,
+
+        [ValidateSet('Default','Changed','Hilight')]
+        $State = 'Default'
+    )
+
+    begin
+    {
+        $drawWidth =  $Host.UI.rawui.WindowSize.Width
+        $backgroundColor = @{}
+        switch($State)
+        {
+            'Changed'
+            {
+                $backgroundColor['BackgroundColor'] = 'DarkGreen'
+            }
+            'Hilight'
+            {
+                $backgroundColor['BackgroundColor'] = 'DarkCyan'
+            }
+        }
+    }
+
+    process
+    {
+        $foregroundColor = @{}
+        Switch -regex ($Message)
+        {
+            '^ERROR:'
+            {
+                $foregroundColor['ForegroundColor'] = 'Red'
+                $backgroundColor['BackgroundColor'] = 'Black'
+            }
+        }
+        if($Message.Length -ge $drawWidth)
+        {
+            $Message = $Message.Substring(0,$drawWidth)
+        }
+        # Fill line with space so whole line gets color
+        $formatted = "{0,-$drawWidth}" -f $Message
+        Write-Host $formatted @foregroundColor @backgroundColor
+    }
+}
+
 function Watch-Command
 {
     <#
@@ -14,7 +66,7 @@ function Watch-Command
     param
     (
         # The command to execute each loop
-        [Alias('Replay','Watch','Command')]
+        [Alias('Replay','Watch','Replay-Command')]
         [Parameter(
             Mandatory,
             Position = 0
@@ -33,52 +85,70 @@ function Watch-Command
     {
         Clear-Host
     }
+
     process
     {
         $previous = @()
         $ghost = @()
         while($true)
         {
+            $output = @()
             $esc = [char]27
             $setCursorTop = "$esc[0;0H"
             $hideCursor = "$esc[?25l"
             $showCursor = "$esc[?25h"
             $message = "{0:HH:mm:ss} Refresh {1}: {2,-60}" -f (Get-Date),$Seconds, $ScriptBlock.ToString()
-            
+
             try
             {
-                $output = @($ScriptBlock.Invoke() | Out-String -Stream)
+                $errorOffset = $error.Count
+                $output = [string[]]@(& $ScriptBlock *>&1  | Out-String -Stream)
+
+                # First line is often blank so drop it if so
+                if([string]::IsNullOrWhiteSpace($output[0]))
+                {
+                    $output = [string[]]@($output | Select-Object -Skip 1)
+                }
             }
             catch
             {
-                $output = @( $PSItem | Out-String -Stream )
+                $output = [string[]]@( 
+                    # Skipping error[0] because it is our scriptblock.invoke()
+                    $error.RemoveAt(0)
+                    $startAt = ($error.count - $errorOffset) - 1
+                    $error[$startAt..0] | Out-String -Stream | 
+                        ForEach-Object{"ERROR:$_"} 
+                )
             }
             
             Write-Host "$hideCursor${setCursorTop}" -NoNewline
-            Write-Host "$message"
+            WriteHost "$message" -State Default
 
-            for($index = 1; $index -lt $Host.UI.rawui.WindowSize.Height - 1;$index++ )
+            # Need to leave room at the end so that we don't scroll console
+            $drawArea =  $Host.UI.rawui.WindowSize.Height - 2
+            for($index = 0; $index -lt $drawArea; $index++ )
             {
                 if($ShowChanges)
                 {
                     if($output[$index] -ne $previous[$index])
                     {
-                        Write-Host $output[$index] -BackgroundColor DarkGreen
+                        WriteHost $output[$index] -State Changed
                     }
                     elseif($output[$index] -ne $ghost[$index])
                     {
-                        Write-Host $output[$index] -BackgroundColor DarkCyan
+                        WriteHost $output[$index] -State Hilight
                     }
                     else
                     {
-                        Write-Host $output[$index]
+                        WriteHost $output[$index]
                     }
                 }
                 else
                 {
-                    Write-Host $output[$index]
+                    WriteHost $output[$index]
                 }
             }
+
             Write-Host $showCursor -NoNewline
             Start-Sleep -Seconds $Seconds
             $ghost = $previous
